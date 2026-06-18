@@ -23,4 +23,12 @@ data class Track(
     val feedbackTokens: FeedbackTokens?,
     val resultType: String?,
     val year: String? = null,
+    val addedBy: PlaylistContributor? = null,
+)
+
+@Serializable
+data class PlaylistContributor(
+    val name: String?,
+    val channelId: String?,
+    val avatarUrl: String?,
 )

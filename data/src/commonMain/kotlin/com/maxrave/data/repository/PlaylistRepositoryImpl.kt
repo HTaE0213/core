@@ -30,6 +30,7 @@ import com.maxrave.kotlinytmusicscraper.models.MusicShelfRenderer
 import com.maxrave.kotlinytmusicscraper.models.SongItem
 import com.maxrave.kotlinytmusicscraper.models.WatchEndpoint
 import com.maxrave.kotlinytmusicscraper.pages.NextPage
+import com.maxrave.kotlinytmusicscraper.models.YouTubeLocale
 import com.maxrave.kotlinytmusicscraper.parser.getPlaylistContinuation
 import com.maxrave.kotlinytmusicscraper.parser.getPlaylistRadioEndpoint
 import com.maxrave.kotlinytmusicscraper.parser.getPlaylistShuffleEndpoint
@@ -438,6 +439,8 @@ internal class PlaylistRepositoryImpl(
     override fun getPlaylistData(
         playlistId: String,
         viewString: String,
+        hl: String?,
+        gl: String?,
     ): Flow<Resource<Pair<PlaylistBrowse, String?>>> =
         flow {
             runCatching {
@@ -449,8 +452,13 @@ internal class PlaylistRepositoryImpl(
                         playlistId
                     }
                 Logger.d("getPlaylistData", "playlist id: $id")
+                val customLocale = if (hl != null || gl != null) {
+                    YouTubeLocale(hl = hl ?: "en", gl = gl ?: "US")
+                } else {
+                    null
+                }
                 youTube
-                    .customQuery(browseId = id, setLogin = true)
+                    .customQuery(browseId = id, setLogin = true, customLocale = customLocale)
                     .onSuccess { result ->
                         val listContent: ArrayList<Track> = arrayListOf()
                         val data: List<MusicShelfRenderer.Content>? =
@@ -752,6 +760,54 @@ internal class PlaylistRepositoryImpl(
                 }.onFailure {
                     emit(Resource.Error<String>(it.message ?: "Unknown error"))
                 }
+        }.flowOn(Dispatchers.IO)
+
+    override fun removeYouTubePlaylistItem(
+        playlistId: String,
+        videoId: String,
+    ): Flow<Resource<String>> =
+        flow {
+            val items = youTube.getYouTubePlaylistFullTracksWithSetVideoId(playlistId).getOrElse { error ->
+                emit(Resource.Error(error.message ?: "Unable to load playlist edit data"))
+                return@flow
+            }
+            val setVideoId = items.firstOrNull { it.first.id == videoId }?.second
+            if (setVideoId == null) {
+                emit(Resource.Error("Unable to identify the playlist item"))
+                return@flow
+            }
+            youTube.removeItemYouTubePlaylist(playlistId, videoId, setVideoId)
+                .onSuccess { emit(Resource.Success(it.toString())) }
+                .onFailure { emit(Resource.Error(it.message ?: "Unable to remove the playlist item")) }
+        }.flowOn(Dispatchers.IO)
+
+    override fun moveYouTubePlaylistItem(
+        playlistId: String,
+        fromIndex: Int,
+        toIndex: Int,
+    ): Flow<Resource<String>> =
+        flow {
+            if (fromIndex == toIndex) {
+                emit(Resource.Success("No change"))
+                return@flow
+            }
+            val items = youTube.getYouTubePlaylistFullTracksWithSetVideoId(playlistId).getOrElse { error ->
+                emit(Resource.Error(error.message ?: "Unable to load playlist edit data"))
+                return@flow
+            }
+            if (fromIndex !in items.indices || toIndex !in items.indices) {
+                emit(Resource.Error("Playlist position is out of range"))
+                return@flow
+            }
+            val movedSetVideoId = items[fromIndex].second
+            val successorSetVideoId = if (fromIndex < toIndex) {
+                items.getOrNull(toIndex + 1)?.second
+            } else {
+                items[toIndex].second
+            }
+            youTube.movePlaylistItem(playlistId, movedSetVideoId, successorSetVideoId)
+                .onSuccess { emit(Resource.Success(it.toString())) }
+                .onFailure { emit(Resource.Error(it.message ?: "Unable to reorder the playlist")) }
         }.flowOn(Dispatchers.IO)
 
     override suspend fun insertYourYouTubePlaylist(yourYouTubePlaylist: YourYouTubePlaylistList) =

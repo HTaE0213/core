@@ -2,6 +2,7 @@ package com.maxrave.data.mapping
 
 import com.maxrave.data.parser.toListThumbnail
 import com.maxrave.domain.data.model.browse.album.Track
+import com.maxrave.domain.data.model.browse.album.PlaylistContributor
 import com.maxrave.domain.data.model.canvas.CanvasResult
 import com.maxrave.domain.data.model.mediaService.SponsorSkipSegments
 import com.maxrave.domain.data.model.metadata.Line
@@ -53,6 +54,14 @@ internal fun SongItem.toTrack(): Track =
         feedbackTokens = null,
         resultType = null,
         year = null,
+        addedBy =
+            this.addedBy?.let {
+                PlaylistContributor(
+                    name = it.name,
+                    channelId = it.channelId,
+                    avatarUrl = it.avatarUrl,
+                )
+            },
     )
 
 internal fun VideoItem.toTrack(): Track =

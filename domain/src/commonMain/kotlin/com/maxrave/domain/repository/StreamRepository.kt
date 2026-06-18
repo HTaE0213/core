@@ -52,4 +52,6 @@ interface StreamRepository {
     fun is403Url(url: String): Flow<Boolean>
 
     suspend fun invalidateFormat(videoId: String)
+
+    fun getHeatmapPeak(videoId: String): Flow<Long?>
 }

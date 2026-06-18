@@ -21,6 +21,12 @@ data class Album(
     val id: String,
 )
 
+data class PlaylistContributor(
+    val name: String?,
+    val channelId: String?,
+    val avatarUrl: String?,
+)
+
 data class SongItem(
     override val id: String,
     override val title: String,
@@ -34,6 +40,7 @@ data class SongItem(
     val badges: List<SongBadges>? = null,
     val likeStatus: LikeStatus = LikeStatus.INDIFFERENT,
     val setVideoId: String? = null,
+    val addedBy: PlaylistContributor? = null,
 ) : YTItem() {
     override val shareLink: String
         get() = "https://simpmusic.org/app/watch?v=$id"

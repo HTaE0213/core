@@ -25,6 +25,7 @@ data class MusicResponsiveListItemRenderer(
     val playlistItemData: PlaylistItemData?,
     val overlay: Overlay?,
     val navigationEndpoint: NavigationEndpoint?,
+    val contributorsAvatars: ContributorsAvatars? = null,
 ) {
     val isSong: Boolean
         get() = navigationEndpoint == null || navigationEndpoint.watchEndpoint != null || navigationEndpoint.watchPlaylistEndpoint != null
@@ -165,6 +166,58 @@ data class MusicResponsiveListItemRenderer(
         val playlistSetVideoId: String?,
         val videoId: String,
     )
+
+    @Serializable
+    data class ContributorsAvatars(
+        val avatarStackViewModel: AvatarStackViewModel? = null,
+    ) {
+        @Serializable
+        data class AvatarStackViewModel(
+            val avatars: List<Avatar>? = null,
+            val rendererContext: RendererContext? = null,
+        ) {
+            @Serializable
+            data class Avatar(
+                val avatarViewModel: AvatarViewModel? = null,
+            ) {
+                @Serializable
+                data class AvatarViewModel(
+                    val image: AvatarImage? = null,
+                    val accessibilityText: String? = null,
+                ) {
+                    @Serializable
+                    data class AvatarImage(
+                        val sources: List<Source>? = null,
+                    ) {
+                        @Serializable
+                        data class Source(
+                            val url: String? = null,
+                        )
+                    }
+                }
+            }
+
+            @Serializable
+            data class RendererContext(
+                val commandContext: CommandContext? = null,
+            ) {
+                @Serializable
+                data class CommandContext(
+                    val onTap: OnTap? = null,
+                ) {
+                    @Serializable
+                    data class OnTap(
+                        val innertubeCommand: InnertubeCommand? = null,
+                    ) {
+                        @Serializable
+                        data class InnertubeCommand(
+                            val browseEndpoint: BrowseEndpoint? = null,
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     @Serializable
     data class Overlay(

@@ -18,6 +18,7 @@ import com.maxrave.domain.data.model.searchResult.videos.VideosResult
 import com.maxrave.domain.repository.SearchRepository
 import com.maxrave.domain.utils.Resource
 import com.maxrave.kotlinytmusicscraper.YouTube
+import com.maxrave.kotlinytmusicscraper.models.YouTubeLocale
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -44,11 +45,12 @@ internal class SearchRepositoryImpl(
             localDataSource.deleteSearchHistory()
         }
 
-    override fun getSearchDataSong(query: String): Flow<Resource<ArrayList<SongsResult>>> =
+    override fun getSearchDataSong(query: String, hl: String?, gl: String?): Flow<Resource<ArrayList<SongsResult>>> =
         flow {
+            val customLocale = if (hl != null || gl != null) YouTubeLocale(hl = hl ?: "en", gl = gl ?: "US") else null
             runCatching {
                 youTube
-                    .search(query, YouTube.SearchFilter.FILTER_SONG)
+                    .search(query, YouTube.SearchFilter.FILTER_SONG, customLocale = customLocale)
                     .onSuccess { result ->
                         val listSongs: ArrayList<SongsResult> = arrayListOf()
                         var countinueParam = result.continuation
@@ -80,11 +82,12 @@ internal class SearchRepositoryImpl(
             }
         }.flowOn(Dispatchers.IO)
 
-    override fun getSearchDataVideo(query: String): Flow<Resource<ArrayList<VideosResult>>> =
+    override fun getSearchDataVideo(query: String, hl: String?, gl: String?): Flow<Resource<ArrayList<VideosResult>>> =
         flow {
+            val customLocale = if (hl != null || gl != null) YouTubeLocale(hl = hl ?: "en", gl = gl ?: "US") else null
             runCatching {
                 youTube
-                    .search(query, YouTube.SearchFilter.FILTER_VIDEO)
+                    .search(query, YouTube.SearchFilter.FILTER_VIDEO, customLocale = customLocale)
                     .onSuccess { result ->
                         val listSongs: ArrayList<VideosResult> = arrayListOf()
                         var countinueParam = result.continuation
@@ -116,11 +119,12 @@ internal class SearchRepositoryImpl(
             }
         }.flowOn(Dispatchers.IO)
 
-    override fun getSearchDataPodcast(query: String): Flow<Resource<ArrayList<PlaylistsResult>>> =
+    override fun getSearchDataPodcast(query: String, hl: String?, gl: String?): Flow<Resource<ArrayList<PlaylistsResult>>> =
         flow {
+            val customLocale = if (hl != null || gl != null) YouTubeLocale(hl = hl ?: "en", gl = gl ?: "US") else null
             runCatching {
                 youTube
-                    .search(query, YouTube.SearchFilter.FILTER_PODCAST)
+                    .search(query, YouTube.SearchFilter.FILTER_PODCAST, customLocale = customLocale)
                     .onSuccess { result ->
                         println(query)
                         val listPlaylist: ArrayList<PlaylistsResult> = arrayListOf()
@@ -153,11 +157,12 @@ internal class SearchRepositoryImpl(
             }
         }.flowOn(Dispatchers.IO)
 
-    override fun getSearchDataFeaturedPlaylist(query: String): Flow<Resource<ArrayList<PlaylistsResult>>> =
+    override fun getSearchDataFeaturedPlaylist(query: String, hl: String?, gl: String?): Flow<Resource<ArrayList<PlaylistsResult>>> =
         flow {
+            val customLocale = if (hl != null || gl != null) YouTubeLocale(hl = hl ?: "en", gl = gl ?: "US") else null
             runCatching {
                 youTube
-                    .search(query, YouTube.SearchFilter.FILTER_FEATURED_PLAYLIST)
+                    .search(query, YouTube.SearchFilter.FILTER_FEATURED_PLAYLIST, customLocale = customLocale)
                     .onSuccess { result ->
                         val listPlaylist: ArrayList<PlaylistsResult> = arrayListOf()
                         var countinueParam = result.continuation
@@ -188,11 +193,12 @@ internal class SearchRepositoryImpl(
             }
         }.flowOn(Dispatchers.IO)
 
-    override fun getSearchDataArtist(query: String): Flow<Resource<ArrayList<ArtistsResult>>> =
+    override fun getSearchDataArtist(query: String, hl: String?, gl: String?): Flow<Resource<ArrayList<ArtistsResult>>> =
         flow {
+            val customLocale = if (hl != null || gl != null) YouTubeLocale(hl = hl ?: "en", gl = gl ?: "US") else null
             runCatching {
                 youTube
-                    .search(query, YouTube.SearchFilter.FILTER_ARTIST)
+                    .search(query, YouTube.SearchFilter.FILTER_ARTIST, customLocale = customLocale)
                     .onSuccess { result ->
                         val listArtist: ArrayList<ArtistsResult> = arrayListOf()
                         var countinueParam = result.continuation
@@ -223,11 +229,12 @@ internal class SearchRepositoryImpl(
             }
         }.flowOn(Dispatchers.IO)
 
-    override fun getSearchDataAlbum(query: String): Flow<Resource<ArrayList<AlbumsResult>>> =
+    override fun getSearchDataAlbum(query: String, hl: String?, gl: String?): Flow<Resource<ArrayList<AlbumsResult>>> =
         flow {
+            val customLocale = if (hl != null || gl != null) YouTubeLocale(hl = hl ?: "en", gl = gl ?: "US") else null
             runCatching {
                 youTube
-                    .search(query, YouTube.SearchFilter.FILTER_ALBUM)
+                    .search(query, YouTube.SearchFilter.FILTER_ALBUM, customLocale = customLocale)
                     .onSuccess { result ->
                         val listAlbum: ArrayList<AlbumsResult> = arrayListOf()
                         var countinueParam = result.continuation
@@ -258,11 +265,12 @@ internal class SearchRepositoryImpl(
             }
         }.flowOn(Dispatchers.IO)
 
-    override fun getSearchDataPlaylist(query: String): Flow<Resource<ArrayList<PlaylistsResult>>> =
+    override fun getSearchDataPlaylist(query: String, hl: String?, gl: String?): Flow<Resource<ArrayList<PlaylistsResult>>> =
         flow {
+            val customLocale = if (hl != null || gl != null) YouTubeLocale(hl = hl ?: "en", gl = gl ?: "US") else null
             runCatching {
                 youTube
-                    .search(query, YouTube.SearchFilter.FILTER_COMMUNITY_PLAYLIST)
+                    .search(query, YouTube.SearchFilter.FILTER_COMMUNITY_PLAYLIST, customLocale = customLocale)
                     .onSuccess { result ->
                         val listPlaylist: ArrayList<PlaylistsResult> = arrayListOf()
                         var countinueParam = result.continuation

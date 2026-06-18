@@ -2,11 +2,13 @@ package com.maxrave.kotlinytmusicscraper.parser
 
 import com.maxrave.kotlinytmusicscraper.models.MusicResponsiveListItemRenderer
 import com.maxrave.kotlinytmusicscraper.models.MusicShelfRenderer
+import com.maxrave.kotlinytmusicscraper.models.PlaylistContributor
 import com.maxrave.kotlinytmusicscraper.models.SongItem
 import com.maxrave.kotlinytmusicscraper.models.WatchEndpoint
 import com.maxrave.kotlinytmusicscraper.models.getContinuation
 import com.maxrave.kotlinytmusicscraper.models.response.BrowseResponse
 import com.maxrave.kotlinytmusicscraper.models.response.LikeStatus
+import com.maxrave.kotlinytmusicscraper.utils.parseTime
 import com.maxrave.logger.Logger
 
 fun BrowseResponse.fromPlaylistToTrack(): List<SongItem> =
@@ -308,6 +310,15 @@ fun MusicShelfRenderer.Content.toSongItem(): SongItem? {
     val flexColumns = this.musicResponsiveListItemRenderer?.flexColumns
     val fixedColumns = this.musicResponsiveListItemRenderer?.fixedColumns
     val menu = this.musicResponsiveListItemRenderer?.menu
+    val contributorStack =
+        this.musicResponsiveListItemRenderer
+            ?.contributorsAvatars
+            ?.avatarStackViewModel
+    val contributorAvatar =
+        contributorStack
+            ?.avatars
+            ?.firstOrNull()
+            ?.avatarViewModel
     return SongItem(
         id =
             flexColumns
@@ -366,7 +377,17 @@ fun MusicShelfRenderer.Content.toSongItem(): SongItem? {
                 ?.runs
                 ?.firstOrNull()
                 ?.text
-                .toDurationSeconds(),
+                .toDurationSeconds()
+                .takeIf { it > 0 }
+                ?: flexColumns
+                    .firstNotNullOfOrNull { column ->
+                        column.musicResponsiveListItemFlexColumnRenderer.text
+                            ?.runs
+                            ?.firstOrNull()
+                            ?.text
+                            ?.takeIf { value -> value.matches(Regex("\\d{1,2}:\\d{2}(?::\\d{2})?")) }
+                            ?.parseTime()
+                    },
         thumbnail =
             this.musicResponsiveListItemRenderer
                 ?.thumbnail
@@ -399,6 +420,20 @@ fun MusicShelfRenderer.Content.toSongItem(): SongItem? {
                 ?.toLikeStatus()
                 ?: LikeStatus.INDIFFERENT,
         badges = this.musicResponsiveListItemRenderer?.badges?.toSongBadges(),
+        addedBy =
+            contributorAvatar?.let {
+                PlaylistContributor(
+                    name = it.accessibilityText,
+                    channelId =
+                        contributorStack.rendererContext
+                            ?.commandContext
+                            ?.onTap
+                            ?.innertubeCommand
+                            ?.browseEndpoint
+                            ?.browseId,
+                    avatarUrl = it.image?.sources?.lastOrNull()?.url,
+                )
+            },
     )
 }
 

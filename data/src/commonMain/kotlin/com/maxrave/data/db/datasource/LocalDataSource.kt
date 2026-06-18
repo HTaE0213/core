@@ -48,6 +48,12 @@ internal class LocalDataSource(
         offset: Int,
     ) = databaseDao.getRecentSongs(limit, offset)
 
+    suspend fun getRecentSongsExcluding(
+        limit: Int,
+        offset: Int,
+        excludedVideoIds: List<String>,
+    ) = databaseDao.getRecentSongsExcluding(limit, offset, excludedVideoIds)
+
     suspend fun getSongByListVideoId(
         primaryKeyList: List<String>,
         offset: Int,

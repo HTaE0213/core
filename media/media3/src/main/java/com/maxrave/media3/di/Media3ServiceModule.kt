@@ -47,7 +47,9 @@ import com.maxrave.common.Config.MAIN_PLAYER
 import com.maxrave.common.Config.PLAYER_CACHE
 import com.maxrave.common.Config.SERVICE_SCOPE
 import com.maxrave.common.MERGING_DATA_TYPE
+import com.maxrave.domain.extension.isBefore
 import com.maxrave.domain.extension.now
+import com.maxrave.domain.extension.plusSeconds
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
@@ -272,8 +274,13 @@ private fun provideResolvingDataSourceFactory(
                     if (videoUrl != null && it.expiredTime > now()) {
                         Logger.d("Stream", videoUrl)
                         Logger.w("Stream", "Video from format")
-                        val is403Url = streamRepository.is403Url(videoUrl).firstOrNull() != false
-                        Logger.d("Stream", "is 403 $is403Url")
+                        val isExpiredSoon = it.expiredTime.isBefore(now().plusSeconds(300))
+                        val is403Url = if (isExpiredSoon) {
+                            streamRepository.is403Url(videoUrl).firstOrNull() != false
+                        } else {
+                            false
+                        }
+                        Logger.d("Stream", "is 403 $is403Url (expiredSoon: $isExpiredSoon)")
                         if (!is403Url) {
                             dataSpecReturn = dataSpec.withUri(videoUrl.toUri()).subrange(dataSpec.uriPositionOffset, chunkLength)
                             resolved = true
@@ -300,8 +307,13 @@ private fun provideResolvingDataSourceFactory(
                     if (audioUrl != null && it.expiredTime > now()) {
                         Logger.d("Stream", audioUrl)
                         Logger.w("Stream", "Audio from format")
-                        val is403Url = streamRepository.is403Url(audioUrl).firstOrNull() != false
-                        Logger.d("Stream", "is 403 $is403Url")
+                        val isExpiredSoon = it.expiredTime.isBefore(now().plusSeconds(300))
+                        val is403Url = if (isExpiredSoon) {
+                            streamRepository.is403Url(audioUrl).firstOrNull() != false
+                        } else {
+                            false
+                        }
+                        Logger.d("Stream", "is 403 $is403Url (expiredSoon: $isExpiredSoon)")
                         if (!is403Url) {
                             dataSpecReturn = dataSpec.withUri(audioUrl.toUri()).subrange(dataSpec.uriPositionOffset, chunkLength)
                             resolved = true

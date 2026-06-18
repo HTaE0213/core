@@ -172,6 +172,7 @@ internal class HomeRepositoryImpl(
                         Logger.d("Repository", "List size: ${list.size}")
                         emit(Resource.Success(continueParam to list.toList()))
                     }.onFailure { error ->
+                        if (error is kotlinx.coroutines.CancellationException) throw error
                         emit(Resource.Error<Pair<String?, List<HomeItem>>>(error.message.toString()))
                     }
             }

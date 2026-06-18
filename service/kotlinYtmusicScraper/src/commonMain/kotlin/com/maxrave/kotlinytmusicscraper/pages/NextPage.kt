@@ -5,6 +5,7 @@ import com.maxrave.kotlinytmusicscraper.models.Artist
 import com.maxrave.kotlinytmusicscraper.models.BrowseEndpoint
 import com.maxrave.kotlinytmusicscraper.models.MusicResponsiveListItemRenderer
 import com.maxrave.kotlinytmusicscraper.models.PlaylistPanelVideoRenderer
+import com.maxrave.kotlinytmusicscraper.models.PlaylistContributor
 import com.maxrave.kotlinytmusicscraper.models.SongItem
 import com.maxrave.kotlinytmusicscraper.models.WatchEndpoint
 import com.maxrave.kotlinytmusicscraper.models.oddElements
@@ -33,11 +34,13 @@ object NextPage {
                 ?.oddElements() ?: return null
         val albumRuns =
             renderer.flexColumns
-                .getOrNull(2)
+                .find { it.musicResponsiveListItemFlexColumnRenderer.isAlbum() }
                 ?.musicResponsiveListItemFlexColumnRenderer
                 ?.text
                 ?.runs
                 ?.firstOrNull()
+        val contributorStack = renderer.contributorsAvatars?.avatarStackViewModel
+        val contributorAvatar = contributorStack?.avatars?.firstOrNull()?.avatarViewModel
         val setVideoId =
             renderer.menu
                 ?.menuRenderer
@@ -82,7 +85,15 @@ object NextPage {
                     ?.runs
                     ?.firstOrNull()
                     ?.text
-                    ?.parseTime(),
+                    ?.parseTime()
+                    ?: renderer.flexColumns.firstNotNullOfOrNull { column ->
+                        column.musicResponsiveListItemFlexColumnRenderer.text
+                            ?.runs
+                            ?.firstOrNull()
+                            ?.text
+                            ?.takeIf { value -> value.matches(Regex("\\d{1,2}:\\d{2}(?::\\d{2})?")) }
+                            ?.parseTime()
+                    },
             thumbnail = renderer.thumbnail?.musicThumbnailRenderer?.getThumbnailUrl() ?: "",
             explicit = false,
             endpoint =
@@ -95,6 +106,20 @@ object NextPage {
                     ?.navigationEndpoint
                     ?.watchEndpoint,
             thumbnails = renderer.thumbnail?.musicThumbnailRenderer?.thumbnail,
+            addedBy =
+                contributorAvatar?.let {
+                    PlaylistContributor(
+                        name = it.accessibilityText,
+                        channelId =
+                            contributorStack.rendererContext
+                                ?.commandContext
+                                ?.onTap
+                                ?.innertubeCommand
+                                ?.browseEndpoint
+                                ?.browseId,
+                        avatarUrl = it.image?.sources?.lastOrNull()?.url,
+                    )
+                },
         )
     }
 

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.maxrave.common.SELECTED_LANGUAGE
 import com.maxrave.common.SUPPORTED_LANGUAGE
 import com.maxrave.common.SponsorBlockType
@@ -208,6 +209,39 @@ internal class DataStoreManagerImpl(
             }
         }
     }
+
+    override val highlightModeEnabled: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[HIGHLIGHT_MODE_ENABLED] ?: FALSE
+        }
+
+    override suspend fun setHighlightModeEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            if (enabled) {
+                settingsDataStore.edit { settings ->
+                    settings[HIGHLIGHT_MODE_ENABLED] = TRUE
+                }
+            } else {
+                settingsDataStore.edit { settings ->
+                    settings[HIGHLIGHT_MODE_ENABLED] = FALSE
+                }
+            }
+        }
+    }
+
+    override val highlightDuration: Flow<Int> =
+        settingsDataStore.data.map { preferences ->
+            preferences[HIGHLIGHT_DURATION] ?: 20
+        }
+
+    override suspend fun setHighlightDuration(duration: Int) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[HIGHLIGHT_DURATION] = duration
+            }
+        }
+    }
+
 
     override val skipSilent: Flow<String> =
         settingsDataStore.data.map { preferences ->
@@ -1343,6 +1377,34 @@ internal class DataStoreManagerImpl(
         }
     }
 
+    override val incognitoModeEnabled: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[INCOGNITO_MODE_ENABLED] ?: FALSE
+        }
+
+    override suspend fun setIncognitoModeEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[INCOGNITO_MODE_ENABLED] = if (enabled) TRUE else FALSE
+            }
+        }
+    }
+
+    override val incognitoSongIds: Flow<Set<String>> =
+        settingsDataStore.data.map { preferences ->
+            preferences[INCOGNITO_SONG_IDS] ?: emptySet()
+        }
+
+    override suspend fun setIncognitoSongHidden(videoId: String, hidden: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                val current = settings[INCOGNITO_SONG_IDS] ?: emptySet()
+                settings[INCOGNITO_SONG_IDS] =
+                    if (hidden) current + videoId else current - videoId
+            }
+        }
+    }
+
     // Auto Backup
     override val autoBackupEnabled: Flow<String> =
         settingsDataStore.data.map { preferences ->
@@ -1488,6 +1550,11 @@ internal class DataStoreManagerImpl(
         val RICH_PRESENCE = stringPreferencesKey("rich_presence")
 
         val LOCAL_TRACKING_ENABLED = stringPreferencesKey("local_tracking_enabled")
+        val INCOGNITO_MODE_ENABLED = stringPreferencesKey("incognito_mode_enabled")
+        val INCOGNITO_SONG_IDS = stringSetPreferencesKey("incognito_song_ids")
+
+        val HIGHLIGHT_MODE_ENABLED = stringPreferencesKey("highlight_mode_enabled")
+        val HIGHLIGHT_DURATION = intPreferencesKey("highlight_duration")
 
         // Auto Backup
         val AUTO_BACKUP_ENABLED = stringPreferencesKey("auto_backup_enabled")

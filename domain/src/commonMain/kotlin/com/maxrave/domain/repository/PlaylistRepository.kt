@@ -66,6 +66,8 @@ interface PlaylistRepository {
     fun getPlaylistData(
         playlistId: String,
         viewString: String,
+        hl: String? = null,
+        gl: String? = null,
     ): Flow<Resource<Pair<PlaylistBrowse, String?>>>
 
     fun getLibraryPlaylist(): Flow<List<PlaylistsResult>?>
@@ -75,6 +77,17 @@ interface PlaylistRepository {
     fun updateYourYouTubePlaylistTitle(
         playlistId: String,
         newTitle: String,
+    ): Flow<Resource<String>>
+
+    fun removeYouTubePlaylistItem(
+        playlistId: String,
+        videoId: String,
+    ): Flow<Resource<String>>
+
+    fun moveYouTubePlaylistItem(
+        playlistId: String,
+        fromIndex: Int,
+        toIndex: Int,
     ): Flow<Resource<String>>
 
     suspend fun insertYourYouTubePlaylist(yourYouTubePlaylist: YourYouTubePlaylistList)

@@ -178,7 +178,14 @@ internal class SongRepositoryImpl(
     override suspend fun getRecentSong(
         limit: Int,
         offset: Int,
-    ) = localDataSource.getRecentSongs(limit, offset)
+    ): List<SongEntity> {
+        val excludedVideoIds = dataStoreManager.incognitoSongIds.first().toList()
+        return if (excludedVideoIds.isEmpty()) {
+            localDataSource.getRecentSongs(limit, offset)
+        } else {
+            localDataSource.getRecentSongsExcluding(limit, offset, excludedVideoIds)
+        }
+    }
 
     override suspend fun insertSongInfo(songInfo: SongInfoEntity) =
         withContext(Dispatchers.IO) {

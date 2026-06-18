@@ -206,9 +206,11 @@ class Ytmusic {
         setLogin: Boolean = false,
         isUsingReferer: Boolean = true,
         customCookie: String? = null,
+        customLocale: YouTubeLocale? = null,
     ) {
         contentType(ContentType.Application.Json)
         headers {
+            append(HttpHeaders.AcceptLanguage, (customLocale ?: this@Ytmusic.locale).hl)
             append("X-Goog-Api-Format-Version", "1")
             append("X-YouTube-Client-Name", "${client.xClientName ?: 1}")
             append("X-YouTube-Client-Version", client.clientVersion)
@@ -262,11 +264,12 @@ class Ytmusic {
         query: String? = null,
         params: String? = null,
         continuation: String? = null,
+        customLocale: YouTubeLocale? = null,
     ) = httpClient.post("search") {
-        ytClient(client, true)
+        ytClient(client, true, customLocale = customLocale)
         setBody(
             SearchBody(
-                context = client.toContext(locale, visitorData),
+                context = client.toContext(customLocale ?: locale, visitorData),
                 query = query,
                 params = params,
             ),
@@ -407,12 +410,13 @@ class Ytmusic {
         playlistId: String?,
         cpn: String?,
         signatureTimestamp: Int? = null,
+        customLocale: YouTubeLocale? = null,
     ) = httpClient.post("player") {
-        ytClient(client, setLogin = true)
+        ytClient(client, setLogin = true, customLocale = customLocale)
         setBody(
             PlayerBody(
                 context =
-                    client.toContext(locale, visitorData).let {
+                    client.toContext(customLocale ?: locale, visitorData).let {
                         if (client == TVHTML5) {
                             it.copy(
                                 thirdParty =
@@ -630,13 +634,14 @@ class Ytmusic {
         continuation: String? = null,
         countryCode: String? = null,
         setLogin: Boolean = false,
+        customLocale: YouTubeLocale? = null,
     ) = httpClient.post("browse") {
-        ytClient(client, if (setLogin) true else cookie != "" && cookie != null, isUsingReferer = false)
+        ytClient(client, if (setLogin) true else cookie != "" && cookie != null, isUsingReferer = false, customLocale = customLocale)
 
         if (continuation != null && browseId != null) {
             setBody(
                 BrowseBody(
-                    context = client.toContext(locale, visitorData),
+                    context = client.toContext(customLocale ?: locale, visitorData),
                     browseId = browseId.ifEmpty { null },
                     params = params,
                     continuation = continuation,
@@ -645,7 +650,7 @@ class Ytmusic {
         } else if (continuation != null) {
             setBody(
                 BrowseBody(
-                    context = client.toContext(locale, visitorData),
+                    context = client.toContext(customLocale ?: locale, visitorData),
                     params = params,
                     continuation = continuation,
                 ),
@@ -653,7 +658,7 @@ class Ytmusic {
         } else if (countryCode != null) {
             setBody(
                 BrowseBody(
-                    context = client.toContext(locale, visitorData),
+                    context = client.toContext(customLocale ?: locale, visitorData),
                     browseId = if (browseId.isNullOrEmpty()) null else browseId,
                     params = params,
                     formData = FormData(listOf(countryCode)),
@@ -662,7 +667,7 @@ class Ytmusic {
         } else {
             setBody(
                 BrowseBody(
-                    context = client.toContext(locale, visitorData),
+                    context = client.toContext(customLocale ?: locale, visitorData),
                     browseId = if (browseId.isNullOrEmpty()) null else browseId,
                     params = params,
                 ),

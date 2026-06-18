@@ -257,9 +257,10 @@ class YouTube {
     suspend fun search(
         query: String,
         filter: SearchFilter,
+        customLocale: YouTubeLocale? = null,
     ): Result<SearchResult> =
         runCatching {
-            val response = ytMusic.search(WEB_REMIX, query, filter.value).body<SearchResponse>()
+            val response = ytMusic.search(WEB_REMIX, query, filter.value, customLocale = customLocale).body<SearchResponse>()
             SearchResult(
                 items =
                     response.contents
@@ -546,9 +547,12 @@ class YouTube {
      * @param browseId the artist browseId
      * @return a [Result]<[ArtistPage]> object
      */
-    suspend fun artist(browseId: String): Result<ArtistPage> =
+    suspend fun artist(
+        browseId: String,
+        customLocale: YouTubeLocale? = null,
+    ): Result<ArtistPage> =
         runCatching {
-            val response = ytMusic.browse(WEB_REMIX, browseId).body<BrowseResponse>()
+            val response = ytMusic.browse(WEB_REMIX, browseId, customLocale = customLocale).body<BrowseResponse>()
             ArtistPage(
                 artist =
                     ArtistItem(
@@ -842,8 +846,9 @@ class YouTube {
         continuation: String? = null,
         country: String? = null,
         setLogin: Boolean = true,
+        customLocale: YouTubeLocale? = null,
     ) = runCatching {
-        ytMusic.browse(WEB_REMIX, browseId, params, continuation, country, setLogin).body<BrowseResponse>()
+        ytMusic.browse(WEB_REMIX, browseId, params, continuation, country, setLogin, customLocale = customLocale).body<BrowseResponse>()
     }
 
     /**
@@ -1287,6 +1292,7 @@ class YouTube {
         videoId: String,
         playlistId: String? = null,
         noLogIn: Boolean = false,
+        customLocale: YouTubeLocale? = null,
     ): Result<Triple<String?, PlayerResponse, MediaType>> =
         runCatching {
             val cpn =
@@ -1301,24 +1307,52 @@ class YouTube {
                     }.joinToString("")
 
             var decodedSigResponse: PlayerResponse? = null
-            val tempRes =
-                ytMusic
-                    .player(
-                        WEB_REMIX,
-                        videoId,
-                        playlistId,
-                        cpn,
-                        signatureTimestamp =
-                            run {
-                                val today = Clock.System.todayIn(TimeZone.UTC)
-                                val epoch =
-                                    Instant
-                                        .fromEpochSeconds(0)
-                                        .toLocalDateTime(TimeZone.UTC)
-                                        .date
-                                epoch.daysUntil(today)
-                            },
+            val signatureTimestamp = run {
+                val today = Clock.System.todayIn(TimeZone.UTC)
+                val epoch =
+                    Instant
+                        .fromEpochSeconds(0)
+                        .toLocalDateTime(TimeZone.UTC)
+                        .date
+                epoch.daysUntil(today)
+            }
+
+            var tempRes: PlayerResponse? = null
+            val clientsToTry = listOf(
+                com.maxrave.kotlinytmusicscraper.models.YouTubeClient.WEB_REMIX,
+                com.maxrave.kotlinytmusicscraper.models.YouTubeClient.TVHTML5,
+                com.maxrave.kotlinytmusicscraper.models.YouTubeClient.ANDROID_MUSIC,
+                com.maxrave.kotlinytmusicscraper.models.YouTubeClient.ANDROID,
+                com.maxrave.kotlinytmusicscraper.models.YouTubeClient.IOS
+            )
+
+            for (client in clientsToTry) {
+                try {
+                    Logger.d(TAG, "Trying player request for $videoId with client ${client.clientName}...")
+                    val res = ytMusic.player(
+                        client = client,
+                        videoId = videoId,
+                        playlistId = playlistId,
+                        cpn = cpn,
+                        signatureTimestamp = signatureTimestamp,
+                        customLocale = customLocale,
                     ).body<PlayerResponse>()
+
+                    Logger.d(TAG, "Client ${client.clientName} status: ${res.playabilityStatus.status} (reason: ${res.playabilityStatus.reason})")
+                    if (res.playabilityStatus.status == "OK") {
+                        tempRes = res
+                        break
+                    }
+                } catch (e: Exception) {
+                    Logger.e(TAG, "Error with client ${client.clientName}: ${e.message}")
+                }
+            }
+
+            if (tempRes == null) {
+                throw RuntimeException("No playable client found for $videoId")
+            }
+
+            val tempResProcessed = tempRes
                     .let {
                         val fexp =
                             it.streamingData
@@ -1372,7 +1406,7 @@ class YouTube {
                         )
                     }
 
-            val response = newPipePlayer(videoId, tempRes)
+            val response = newPipePlayer(videoId, tempResProcessed)
             if (response != null) {
                 decodedSigResponse = response
                 Logger.d(TAG, "YouTube Player found URL")

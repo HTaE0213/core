@@ -24,7 +24,6 @@ import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import com.maxrave.common.Config
 import com.maxrave.common.MEDIA_CUSTOM_COMMAND
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.browse.album.Track
@@ -492,12 +491,8 @@ internal class SimpleMediaSessionCallback(
                             continuation = null,
                         ),
                     )
-                    mediaPlayerHandler.loadMediaItem(
-                        firstQueue,
-                        Config.SONG_CLICK,
-                        0,
-                    )
-                    defaultResult
+                    val mediaItem = firstQueue.toMediaItemWithoutPath(SONG)
+                    MediaSession.MediaItemsWithStartPosition(listOf(mediaItem), 0, startPositionMs)
                 }
 
                 FAVORITE -> {
@@ -523,12 +518,8 @@ internal class SimpleMediaSessionCallback(
                                 continuation = null,
                             ),
                         )
-                        mediaPlayerHandler.loadMediaItem(
-                            clickedSong,
-                            Config.PLAYLIST_CLICK,
-                            index,
-                        )
-                        defaultResult
+                        val mediaItemsList = likedSongs.map { it.toMediaItem(FAVORITE) }
+                        MediaSession.MediaItemsWithStartPosition(mediaItemsList, index, startPositionMs)
                     }
                 }
 
@@ -573,12 +564,8 @@ internal class SimpleMediaSessionCallback(
                                 continuation = null,
                             ),
                         )
-                        mediaPlayerHandler.loadMediaItem(
-                            clickedSong,
-                            Config.PLAYLIST_CLICK,
-                            index,
-                        )
-                        defaultResult
+                        val mediaItemsList = songs.map { it.toMediaItem("$PLAYLIST/$playlistId") }
+                        MediaSession.MediaItemsWithStartPosition(mediaItemsList, index, startPositionMs)
                     }
                 }
 
@@ -598,6 +585,7 @@ internal class SimpleMediaSessionCallback(
                                 songRepository.insertSong(it.toSongEntity()).first()
                             }
                             val firstQueue = songs.firstOrNull { it.videoId == songId } ?: return@future defaultResult
+                            val clickedIdx = songs.indexOfFirst { it.videoId == songId }.coerceAtLeast(0)
                             mediaPlayerHandler.setQueueData(
                                 QueueData.Data(
                                     listTracks = songs,
@@ -608,12 +596,8 @@ internal class SimpleMediaSessionCallback(
                                     continuation = null,
                                 ),
                             )
-                            mediaPlayerHandler.loadMediaItem(
-                                firstQueue,
-                                Config.SONG_CLICK,
-                                0,
-                            )
-                            defaultResult
+                            val mediaItemsList = songs.map { it.toMediaItemWithoutPath(SONG) }
+                            MediaSession.MediaItemsWithStartPosition(mediaItemsList, clickedIdx, startPositionMs)
                         }
                     } else if (type == PLAYLIST) {
                         val songId = path.getOrNull(4) ?: return@future defaultResult
@@ -658,12 +642,8 @@ internal class SimpleMediaSessionCallback(
                                     continuation = null,
                                 ),
                             )
-                            mediaPlayerHandler.loadMediaItem(
-                                clickedSong,
-                                Config.PLAYLIST_CLICK,
-                                index,
-                            )
-                            defaultResult
+                            val mediaItemsList = songs.map { it.toMediaItem("$PLAYLIST/$playlistId") }
+                            MediaSession.MediaItemsWithStartPosition(mediaItemsList, index, startPositionMs)
                         } else {
                             defaultResult
                         }

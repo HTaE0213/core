@@ -179,6 +179,17 @@ internal class MediaServiceHandlerImpl(
     private val _currentSongIndex: MutableStateFlow<Int> = MutableStateFlow(player.currentMediaItemIndex)
     override val currentSongIndex: StateFlow<Int> = _currentSongIndex.asStateFlow()
 
+    // Retry count for player errors
+    private var retryCount = 0
+    private var continuousErrorSkipCount = 0
+
+    // Highlight medley variables
+    private var highlightStartPosMs: Long? = null
+    @Volatile private var highlightEndPosMs: Long? = null
+    private var highlightProcessedVideoId: String? = null
+    private var medleyJob: Job? = null
+    private var medleyPausedForResolution = false
+
     // List of Specific variables
 
     private var loudnessEnhancer: LoudnessEnhancer? = null
@@ -186,7 +197,7 @@ internal class MediaServiceHandlerImpl(
 
     private var skipSilent = false
 
-    private var normalizeVolume = false
+    @Volatile private var normalizeVolume = false
 
     private var watchTimeList: ArrayList<Float> = arrayListOf()
 
@@ -246,9 +257,56 @@ internal class MediaServiceHandlerImpl(
         getFormatJob = Job()
         jobWatchtime = Job()
         skipSilent = runBlocking { dataStoreManager.skipSilent.first() == TRUE }
-        normalizeVolume =
-            runBlocking { dataStoreManager.normalizeVolume.first() == TRUE }
         _nowPlaying.value = player.currentMediaItem
+        coroutineScope.launch {
+            dataStoreManager.normalizeVolume.collect { enabled ->
+                normalizeVolume = (enabled == TRUE)
+                mayBeNormalizeVolume()
+            }
+        }
+        coroutineScope.launch {
+            dataStoreManager.highlightModeEnabled.distinctUntilChanged().collectLatest { enabled ->
+                val shouldResumePlayback = medleyPausedForResolution
+                medleyJob?.cancel()
+                medleyPausedForResolution = false
+                highlightProcessedVideoId = null
+                if (enabled == TRUE) {
+                    player.currentMediaItem?.mediaId?.let(::processHighlightPlayback)
+                } else {
+                    highlightStartPosMs = null
+                    highlightEndPosMs = null
+                    if (shouldResumePlayback) {
+                        withContext(Dispatchers.Main) {
+                            player.play()
+                        }
+                    }
+                }
+            }
+        }
+        coroutineScope.launch {
+            combine(
+                _nowPlayingState,
+                com.maxrave.data.helper.MetadataLanguageHelper.resolvedSongs
+            ) { state, resolved ->
+                Pair(state, resolved)
+            }.collectLatest { (state, resolved) ->
+                val videoId = state?.songEntity?.videoId ?: return@collectLatest
+                val resolvedSong = resolved[videoId]
+                if (resolvedSong != null) {
+                    val currentSong = state.songEntity
+                    if (currentSong != null && (currentSong.title != resolvedSong.title || currentSong.artistName?.connectArtists() != resolvedSong.artist)) {
+                        _nowPlayingState.update { current ->
+                            current.copy(
+                                songEntity = currentSong.copy(
+                                    title = resolvedSong.title,
+                                    artistName = listOf(resolvedSong.artist)
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
         if (runBlocking { dataStoreManager.saveStateOfPlayback.first() } == TRUE) {
             Logger.d(TAG, "SaveStateOfPlayback TRUE")
             val shuffleKey = runBlocking { dataStoreManager.shuffleKey.first() }
@@ -324,7 +382,10 @@ internal class MediaServiceHandlerImpl(
             val playbackJob =
                 launch {
                     format.collectLatest { formatTemp ->
-                        if (dataStoreManager.sendBackToGoogle.first() == TRUE) {
+                        if (
+                            dataStoreManager.sendBackToGoogle.first() == TRUE &&
+                            dataStoreManager.incognitoModeEnabled.first() != TRUE
+                        ) {
                             if (formatTemp != null) {
                                 println("format in viewModel: $formatTemp")
                                 Logger.d(TAG, "Collect format ${formatTemp.videoId}")
@@ -418,10 +479,13 @@ internal class MediaServiceHandlerImpl(
                                 Logger.w(TAG, "getDataOfNowPlayingState: Updated thumbs $it")
                             }
                         }
-                        songRepository.updateSongInLibrary(now(), songEntity.videoId).singleOrNull().let {
-                            Logger.w(TAG, "getDataOfNowPlayingState: $it")
+                        if (dataStoreManager.incognitoModeEnabled.first() != TRUE) {
+                            dataStoreManager.setIncognitoSongHidden(songEntity.videoId, hidden = false)
+                            songRepository.updateSongInLibrary(now(), songEntity.videoId).singleOrNull().let {
+                                Logger.w(TAG, "getDataOfNowPlayingState: $it")
+                            }
+                            songRepository.updateListenCount(songEntity.videoId)
                         }
-                        songRepository.updateListenCount(songEntity.videoId)
                         Logger.w(TAG, "getDataOfNowPlayingState: $songEntity")
                         Logger.w(TAG, "getDataOfNowPlayingState: $track")
                         _nowPlayingState.update {
@@ -444,6 +508,7 @@ internal class MediaServiceHandlerImpl(
                             (track?.toSongEntity() ?: mediaItem.toSongEntity()).copy(
                                 thumbnails = thumbUrl,
                             )
+                        val isIncognito = dataStoreManager.incognitoModeEnabled.first() == TRUE
                         songRepository
                             .insertSong(
                                 songEntity,
@@ -451,6 +516,7 @@ internal class MediaServiceHandlerImpl(
                             ?.let {
                                 Logger.w(TAG, "getDataOfNowPlayingState: $it")
                             }
+                        dataStoreManager.setIncognitoSongHidden(songEntity.videoId, hidden = isIncognito)
                         Logger.w(TAG, "getDataOfNowPlayingState: $songEntity")
                         _nowPlayingState.update {
                             it.copy(
@@ -491,7 +557,10 @@ internal class MediaServiceHandlerImpl(
                 if (dataStoreManager.sponsorBlockEnabled.first() == TRUE) {
                     getSkipSegments(videoId)
                 }
-                if (dataStoreManager.sendBackToGoogle.first() == TRUE) {
+                if (
+                    dataStoreManager.sendBackToGoogle.first() == TRUE &&
+                    dataStoreManager.incognitoModeEnabled.first() != TRUE
+                ) {
                     getFormat(videoId)
                 }
             }
@@ -540,6 +609,7 @@ internal class MediaServiceHandlerImpl(
     ) {
         jobWatchtime?.cancel()
         coroutineScope.launch {
+            if (dataStoreManager.incognitoModeEnabled.first() == TRUE) return@launch
             if (playback != null && atr != null && watchTime != null && cpn != null) {
                 watchTimeList = arrayListOf()
                 streamRepository
@@ -562,6 +632,7 @@ internal class MediaServiceHandlerImpl(
             jobWatchtime =
                 launch {
                     simpleMediaState.collect { state ->
+                        if (dataStoreManager.incognitoModeEnabled.first() == TRUE) return@collect
                         if (state is SimpleMediaState.Progress) {
                             val value = state.progress
                             if (value > 0 && watchTimeList.isNotEmpty()) {
@@ -618,13 +689,43 @@ internal class MediaServiceHandlerImpl(
             )
     }
 
+    private fun resolveGenericMediaItem(mediaItem: GenericMediaItem): GenericMediaItem {
+        val videoId = if (mediaItem.isVideo()) {
+            mediaItem.mediaId.removePrefix(com.maxrave.common.MERGING_DATA_TYPE.VIDEO)
+        } else {
+            mediaItem.mediaId
+        }
+        val resolved = com.maxrave.data.helper.MetadataLanguageHelper.resolvedSongs.value[videoId]
+        return if (resolved != null) {
+            mediaItem.copy(
+                metadata = mediaItem.metadata.copy(
+                    title = resolved.title,
+                    artist = resolved.artist
+                )
+            )
+        } else {
+            val rawTitle = mediaItem.metadata.title ?: ""
+            val rawArtist = mediaItem.metadata.artist ?: ""
+            if (videoId.isNotEmpty() && rawTitle.isNotEmpty()) {
+                com.maxrave.data.helper.MetadataLanguageHelper.resolveSongMetadata(
+                    scope = coroutineScope,
+                    videoId = videoId,
+                    currentTitle = rawTitle,
+                    currentArtist = rawArtist
+                )
+            }
+            mediaItem
+        }
+    }
+
     private fun addMediaItemNotSet(
         mediaItem: GenericMediaItem,
         index: Int? = null,
     ) {
+        val resolvedMediaItem = resolveGenericMediaItem(mediaItem)
         index?.let {
-            player.addMediaItem(it, mediaItem)
-        } ?: player.addMediaItem(mediaItem)
+            player.addMediaItem(it, resolvedMediaItem)
+        } ?: player.addMediaItem(resolvedMediaItem)
         if (player.mediaItemCount == 1) {
             player.prepare()
             player.playWhenReady = true
@@ -699,7 +800,20 @@ internal class MediaServiceHandlerImpl(
             coroutineScope.launch {
                 while (true) {
                     delay(100)
-                    _simpleMediaState.value = SimpleMediaState.Progress(player.currentPosition)
+                    val currentPos = player.currentPosition
+                    _simpleMediaState.value = SimpleMediaState.Progress(currentPos)
+
+                    // Highlight medley auto-skip check
+                    val endPos = highlightEndPosMs
+                    if (endPos != null && currentPos >= endPos) {
+                        Logger.d(TAG, "Highlight playback finished (current: $currentPos, end: $endPos). Seeking to next track.")
+                        highlightStartPosMs = null
+                        highlightEndPosMs = null
+                        coroutineScope.launch(Dispatchers.Main) {
+                            player.seekToNext()
+                        }
+                    }
+
                     nowPlayingState.value.songEntity?.let {
                         updateDiscordRpc(it)
                     }
@@ -975,7 +1089,8 @@ internal class MediaServiceHandlerImpl(
         playWhenReady: Boolean,
     ) {
         player.clearMediaItems()
-        player.setMediaItem(mediaItem)
+        val resolvedMediaItem = resolveGenericMediaItem(mediaItem)
+        player.setMediaItem(resolvedMediaItem)
         player.prepare()
         player.playWhenReady = playWhenReady
     }
@@ -2216,6 +2331,11 @@ internal class MediaServiceHandlerImpl(
             PlayerConstants.STATE_READY -> {
                 Logger.d(TAG, "onPlaybackStateChanged: Ready")
                 _simpleMediaState.value = SimpleMediaState.Ready(player.duration)
+                retryCount = 0
+                continuousErrorSkipCount = 0
+                player.currentMediaItem?.mediaId?.let { videoId ->
+                    processHighlightPlayback(videoId)
+                }
             }
 
             else -> {
@@ -2262,8 +2382,11 @@ internal class MediaServiceHandlerImpl(
         }
         if (mediaItem?.mediaId != nowPlayingState.value.mediaItem.mediaId) {
             Logger.w(TAG, "onMediaItemTransition: ${mediaItem?.mediaId}")
+            highlightStartPosMs = null
+            highlightEndPosMs = null
             if (mediaItem != null) {
                 getDataOfNowPlayingState(mediaItem)
+                processHighlightPlayback(mediaItem.mediaId)
             } else {
                 _nowPlayingState.update {
                     NowPlayingTrackState
@@ -2294,7 +2417,9 @@ internal class MediaServiceHandlerImpl(
         currentPositionMillis: Long,
     ) {
         coroutineScope.launch {
-            val trackingEnabled = dataStoreManager.localTrackingEnabled.first() == TRUE
+            val trackingEnabled =
+                dataStoreManager.localTrackingEnabled.first() == TRUE &&
+                    dataStoreManager.incognitoModeEnabled.first() != TRUE
             if (!trackingEnabled) {
                 return@launch
             }
@@ -2339,28 +2464,56 @@ internal class MediaServiceHandlerImpl(
     }
 
     override fun onPlayerError(error: PlayerError) {
-        when (error.errorCode) {
-            PlayerConstants.ERROR_CODE_TIMEOUT -> {
-                Logger.e("Player Error", "onPlayerError (${error.errorCode}): ${error.message}")
-                if (isAppInForeground()) {
-                    showToast(ToastType.PlayerError(error.errorCodeName))
-                } else {
-                    Logger.w("Player Error", "App is not in foreground, skipping toast")
-                }
-                player.pause()
-            }
+        val errorCode = error.errorCode
+        Logger.e("Player Error", "onPlayerError (${error.errorCode}): ${error.message}")
 
-            else -> {
-                Logger.e("Player Error", "onPlayerError (${error.errorCode}): ${error.message}")
-                pushPlayerError(error)
-                if (isAppInForeground()) {
-                    showToast(ToastType.PlayerError(error.errorCodeName))
-                } else {
-                    Logger.w("Player Error", "App is not in foreground, skipping toast")
+        if (errorCode == 1000 || errorCode in 2000..2008 || errorCode == PlayerConstants.ERROR_CODE_TIMEOUT) {
+            if (retryCount < 3) {
+                retryCount++
+                Logger.w("Player Error", "Retrying after invalidating format cache (Attempt $retryCount/3)")
+                coroutineScope.launch {
+                    val videoId = player.currentMediaItem?.mediaId ?: ""
+                    if (videoId.isNotEmpty()) {
+                        Logger.w("Player Error", "Invalidating format cache for $videoId before retry")
+                        streamRepository.invalidateFormat(videoId)
+                        streamRepository.invalidateFormat("${com.maxrave.common.MERGING_DATA_TYPE.VIDEO}$videoId")
+                    }
+                    val currentPos = player.currentPosition
+                    player.seekTo(currentPos)
+                    player.prepare()
+                    player.play()
                 }
-                player.pause()
+                return
+            } else {
+                Logger.e("Player Error", "Retry limit reached (3 attempts).")
+                retryCount = 0
+                continuousErrorSkipCount++
+                if (continuousErrorSkipCount >= 2) {
+                    Logger.e("Player Error", "Continuous error skip limit reached (2 tracks). Stopping playback to prevent infinite loop.")
+                    pushPlayerError(error)
+                    if (isAppInForeground()) {
+                        showToast(ToastType.PlayerError(error.errorCodeName))
+                    }
+                    player.pause()
+                    return
+                }
+                Logger.w("Player Error", "Skipping to next track (continuous error skip count: $continuousErrorSkipCount)")
+                coroutineScope.launch(Dispatchers.Main) {
+                    player.seekToNext()
+                }
+                return
             }
         }
+
+        retryCount = 0
+        continuousErrorSkipCount = 0
+        pushPlayerError(error)
+        if (isAppInForeground()) {
+            showToast(ToastType.PlayerError(error.errorCodeName))
+        } else {
+            Logger.w("Player Error", "App is not in foreground, skipping toast")
+        }
+        player.pause()
     }
 
     override fun shouldOpenOrCloseEqualizerIntent(shouldOpen: Boolean) {
@@ -2452,6 +2605,167 @@ internal class MediaServiceHandlerImpl(
                     )
                 }
             }
+    }
+
+    private fun findChorusFromLyrics(lines: List<com.maxrave.domain.data.model.metadata.Line>?): Long? {
+        if (lines.isNullOrEmpty()) return null
+        val normalizedPhrases = lines.map { line ->
+            line.words.lowercase().replace(Regex("[^a-zA-Z0-9\\s\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]"), "").trim()
+        }
+        val phraseCounts = mutableMapOf<String, Int>()
+        for (phrase in normalizedPhrases) {
+            if (phrase.length > 3) {
+                phraseCounts[phrase] = (phraseCounts[phrase] ?: 0) + 1
+            }
+        }
+        val repeatedPhrases = phraseCounts.filter { it.value >= 2 }
+        if (repeatedPhrases.isNotEmpty()) {
+            val mostRepeated = repeatedPhrases.maxByOrNull { it.value }?.key
+            if (mostRepeated != null) {
+                for (i in lines.indices) {
+                    val norm = normalizedPhrases[i]
+                    if (norm == mostRepeated) {
+                        val start = lines[i].startTimeMs.toLongOrNull()
+                        if (start != null) {
+                            return start
+                        }
+                    }
+                }
+            }
+        }
+        val sortedLines = lines.mapNotNull { line ->
+            val start = line.startTimeMs.toLongOrNull()
+            if (start != null) Pair(start, line.words.length) else null
+        }.sortedBy { it.first }
+        if (sortedLines.isEmpty()) return null
+        val totalDuration = sortedLines.last().first
+        val searchMin = (totalDuration * 0.2).toLong()
+        val searchMax = (totalDuration * 0.8).toLong()
+        var maxDensity = 0
+        var bestTime = searchMin
+        for (i in sortedLines.indices) {
+            val (time, length) = sortedLines[i]
+            if (time < searchMin || time > searchMax) continue
+            var density = 0
+            for (j in i until sortedLines.size) {
+                if (sortedLines[j].first - time <= 30000L) {
+                    density += sortedLines[j].second
+                } else {
+                    break
+                }
+            }
+            if (density > maxDensity) {
+                maxDensity = density
+                bestTime = time
+            }
+        }
+        return bestTime
+    }
+
+    private fun processHighlightPlayback(videoId: String) {
+        if (highlightProcessedVideoId == videoId) return
+        highlightProcessedVideoId = videoId
+        val resumeCanceledResolution = medleyPausedForResolution
+        medleyJob?.cancel()
+        medleyPausedForResolution = false
+        medleyJob = coroutineScope.launch {
+            val highlightEnabled = dataStoreManager.highlightModeEnabled.first() == TRUE
+            if (!highlightEnabled) {
+                highlightStartPosMs = null
+                highlightEndPosMs = null
+                return@launch
+            }
+            val shouldResumePlayback = withContext(Dispatchers.Main) {
+                (player.playWhenReady || resumeCanceledResolution).also { shouldResume ->
+                    if (shouldResume) {
+                        player.pause()
+                    }
+                }
+            }
+            medleyPausedForResolution = shouldResumePlayback
+            val durationSec = dataStoreManager.highlightDuration.first()
+            val previewDurationMs = durationSec * 1000L
+            var startPosMs: Long? = null
+            var endPosMs: Long? = null
+
+            // 1. SponsorBlock (poi_highlight)
+            try {
+                val segmentsRes = streamRepository.getSkipSegments(videoId).first()
+                if (segmentsRes is Resource.Success) {
+                    val highlightSeg = segmentsRes.data?.find { it.category == "poi_highlight" }
+                    if (highlightSeg != null && highlightSeg.segment.size >= 2) {
+                        startPosMs = (highlightSeg.segment[0] * 1000).toLong()
+                        val segLengthMs = ((highlightSeg.segment[1] - highlightSeg.segment[0]) * 1000).toLong()
+                        val allowedLength = segLengthMs.coerceAtMost(60000L)
+                        endPosMs = startPosMs + allowedLength
+                        Logger.d(TAG, "Highlight detected via SponsorBlock: $startPosMs to $endPosMs")
+                    }
+                }
+            } catch (e: Exception) {
+                Logger.e(TAG, "SponsorBlock check error: ${e.message}")
+            }
+
+            // 2. YouTube Heatmap
+            if (startPosMs == null) {
+                try {
+                    val peak = streamRepository.getHeatmapPeak(videoId).first()
+                    if (peak != null) {
+                        startPosMs = peak
+                        endPosMs = peak + previewDurationMs
+                        Logger.d(TAG, "Highlight detected via Heatmap Peak: $startPosMs to $endPosMs")
+                    }
+                } catch (e: Exception) {
+                    Logger.e(TAG, "Heatmap check error: ${e.message}")
+                }
+            }
+
+            // 3. LRC Lyric density/refrain analysis
+            if (startPosMs == null) {
+                try {
+                    val lyricsCanvasRepository: com.maxrave.domain.repository.LyricsCanvasRepository? = getKoin().getOrNull()
+                    val savedLyrics = lyricsCanvasRepository?.getSavedLyrics(videoId)?.first()
+                    if (savedLyrics != null && savedLyrics.syncType == "LINE_SYNCED") {
+                        val lyricChorusTime = findChorusFromLyrics(savedLyrics.lines)
+                        if (lyricChorusTime != null) {
+                            startPosMs = lyricChorusTime
+                            endPosMs = lyricChorusTime + previewDurationMs
+                            Logger.d(TAG, "Highlight detected via Lyric Analysis: $startPosMs to $endPosMs")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Logger.e(TAG, "Lyric analysis error: ${e.message}")
+                }
+            }
+
+            // 4. Fallback: 30% of duration
+            if (startPosMs == null) {
+                val duration = player.duration
+                if (duration > 0) {
+                    val fallbackStart = (duration * 0.3).toLong()
+                    startPosMs = fallbackStart
+                    endPosMs = fallbackStart + previewDurationMs
+                    Logger.d(TAG, "Highlight fallback to 30% position: $startPosMs to $endPosMs")
+                } else {
+                    startPosMs = 60000L
+                    endPosMs = 60000L + previewDurationMs
+                    Logger.d(TAG, "Highlight fallback (duration 0) to 60s position")
+                }
+            }
+
+            highlightStartPosMs = startPosMs
+            highlightEndPosMs = endPosMs
+
+            if (startPosMs != null) {
+                Logger.d(TAG, "Seeking to highlight start: $startPosMs Ms")
+                withContext(Dispatchers.Main) {
+                    player.seekTo(startPosMs)
+                    if (shouldResumePlayback) {
+                        player.play()
+                    }
+                }
+                medleyPausedForResolution = false
+            }
+        }
     }
 }
 

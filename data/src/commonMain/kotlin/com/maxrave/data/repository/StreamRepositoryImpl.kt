@@ -31,6 +31,16 @@ internal class StreamRepositoryImpl(
     private val localDataSource: LocalDataSource,
     private val youTube: YouTube,
 ) : StreamRepository {
+    private val heatmapCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    private fun findHeatmapPeak(response: PlayerResponse): Long? {
+        val decorators = response.markersMap?.timedMarkerDecorators ?: return null
+        val heatmapDecorator = decorators.find { it.key == "HEATMAP" } ?: decorators.firstOrNull()
+        val markers = heatmapDecorator?.timedMarkerDecoratorRenderer?.markers ?: return null
+        if (markers.isEmpty()) return null
+        val peakMarker = markers.maxByOrNull { it.intensityScoreNormalized ?: 0.0 } ?: return null
+        return peakMarker.startMillis
+    }
     override suspend fun insertNewFormat(newFormat: NewFormatEntity) =
         withContext(Dispatchers.IO) {
             localDataSource.insertNewFormat(newFormat)
@@ -113,6 +123,9 @@ internal class StreamRepositoryImpl(
                 .player(videoId, noLogIn = muxed)
                 .onSuccess { data ->
                     val response = data.second
+                    findHeatmapPeak(response)?.let { peak ->
+                        heatmapCache[videoId] = peak
+                    }
                     if (data.third == MediaType.Song) {
                         Logger.w(
                             "Stream",
@@ -384,4 +397,26 @@ internal class StreamRepositoryImpl(
             }
         }
     }
+
+    override fun getHeatmapPeak(videoId: String): Flow<Long?> = flow {
+        val cached = heatmapCache[videoId]
+        if (cached != null) {
+            emit(cached)
+            return@flow
+        }
+        youTube.player(videoId)
+            .onSuccess { data ->
+                val response = data.second
+                val peak = findHeatmapPeak(response)
+                if (peak != null) {
+                    heatmapCache[videoId] = peak
+                    emit(peak)
+                } else {
+                    emit(null)
+                }
+            }
+            .onFailure {
+                emit(null)
+            }
+    }.flowOn(Dispatchers.IO)
 }

@@ -20,6 +20,8 @@ data class PlayerResponse(
     val playbackTracking: PlaybackTracking?,
     @SerialName("captions")
     val captions: YouTubeInitialPage.Captions?,
+    @SerialName("markersMap")
+    val markersMap: MarkersMap? = null,
 ) {
     @Serializable
     data class PlayabilityStatus(
@@ -113,5 +115,35 @@ data class PlayerResponse(
             @SerialName("baseUrl")
             val baseUrl: String?,
         )
+    }
+
+    @Serializable
+    data class MarkersMap(
+        @SerialName("timedMarkerDecorators")
+        val timedMarkerDecorators: List<TimedMarkerDecorator>? = null
+    ) {
+        @Serializable
+        data class TimedMarkerDecorator(
+            @SerialName("key")
+            val key: String? = null,
+            @SerialName("timedMarkerDecoratorRenderer")
+            val timedMarkerDecoratorRenderer: TimedMarkerDecoratorRenderer? = null
+        ) {
+            @Serializable
+            data class TimedMarkerDecoratorRenderer(
+                @SerialName("markers")
+                val markers: List<Marker>? = null
+            ) {
+                @Serializable
+                data class Marker(
+                    @SerialName("startMillis")
+                    val startMillis: Long,
+                    @SerialName("durationMillis")
+                    val durationMillis: Long,
+                    @SerialName("intensityScoreNormalized")
+                    val intensityScoreNormalized: Double? = null
+                )
+            }
+        }
     }
 }

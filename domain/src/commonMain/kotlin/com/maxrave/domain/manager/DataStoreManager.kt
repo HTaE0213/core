@@ -56,6 +56,15 @@ interface DataStoreManager {
 
     suspend fun setNormalizeVolume(normalize: Boolean)
 
+    val highlightModeEnabled: Flow<String>
+
+    suspend fun setHighlightModeEnabled(enabled: Boolean)
+
+    val highlightDuration: Flow<Int>
+
+    suspend fun setHighlightDuration(duration: Int)
+
+
     val skipSilent: Flow<String>
 
     suspend fun setSkipSilent(skip: Boolean)
@@ -334,6 +343,14 @@ interface DataStoreManager {
     val localTrackingEnabled: Flow<String>
 
     suspend fun setLocalTrackingEnabled(enabled: Boolean)
+
+    val incognitoModeEnabled: Flow<String>
+
+    suspend fun setIncognitoModeEnabled(enabled: Boolean)
+
+    val incognitoSongIds: Flow<Set<String>>
+
+    suspend fun setIncognitoSongHidden(videoId: String, hidden: Boolean)
 
     // Auto Backup
     val autoBackupEnabled: Flow<String>

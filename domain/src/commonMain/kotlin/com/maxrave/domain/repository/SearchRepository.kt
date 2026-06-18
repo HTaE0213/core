@@ -17,19 +17,19 @@ interface SearchRepository {
 
     suspend fun deleteSearchHistory()
 
-    fun getSearchDataSong(query: String): Flow<Resource<ArrayList<SongsResult>>>
+    fun getSearchDataSong(query: String, hl: String? = null, gl: String? = null): Flow<Resource<ArrayList<SongsResult>>>
 
-    fun getSearchDataVideo(query: String): Flow<Resource<ArrayList<VideosResult>>>
+    fun getSearchDataVideo(query: String, hl: String? = null, gl: String? = null): Flow<Resource<ArrayList<VideosResult>>>
 
-    fun getSearchDataPodcast(query: String): Flow<Resource<ArrayList<PlaylistsResult>>>
+    fun getSearchDataPodcast(query: String, hl: String? = null, gl: String? = null): Flow<Resource<ArrayList<PlaylistsResult>>>
 
-    fun getSearchDataFeaturedPlaylist(query: String): Flow<Resource<ArrayList<PlaylistsResult>>>
+    fun getSearchDataFeaturedPlaylist(query: String, hl: String? = null, gl: String? = null): Flow<Resource<ArrayList<PlaylistsResult>>>
 
-    fun getSearchDataArtist(query: String): Flow<Resource<ArrayList<ArtistsResult>>>
+    fun getSearchDataArtist(query: String, hl: String? = null, gl: String? = null): Flow<Resource<ArrayList<ArtistsResult>>>
 
-    fun getSearchDataAlbum(query: String): Flow<Resource<ArrayList<AlbumsResult>>>
+    fun getSearchDataAlbum(query: String, hl: String? = null, gl: String? = null): Flow<Resource<ArrayList<AlbumsResult>>>
 
-    fun getSearchDataPlaylist(query: String): Flow<Resource<ArrayList<PlaylistsResult>>>
+    fun getSearchDataPlaylist(query: String, hl: String? = null, gl: String? = null): Flow<Resource<ArrayList<PlaylistsResult>>>
 
     fun getSuggestQuery(query: String): Flow<Resource<SearchSuggestions>>
 }

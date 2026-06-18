@@ -209,6 +209,13 @@ interface DatabaseDao {
         offset: Int,
     ): List<SongEntity>
 
+    @Query("SELECT * FROM song WHERE videoId NOT IN (:excludedVideoIds) ORDER BY inLibrary DESC LIMIT :limit OFFSET :offset")
+    suspend fun getRecentSongsExcluding(
+        limit: Int,
+        offset: Int,
+        excludedVideoIds: List<String>,
+    ): List<SongEntity>
+
     @Query("SELECT * FROM song ORDER BY inLibrary DESC LIMIT :limit OFFSET 0")
     suspend fun getAllSongs(limit: Int): List<SongEntity>
 

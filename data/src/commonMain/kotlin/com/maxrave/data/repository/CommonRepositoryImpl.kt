@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okio.IOException
@@ -39,6 +40,7 @@ internal class CommonRepositoryImpl(
     private val youTube: YouTube,
     private val spotify: Spotify,
     private val aiClient: AiClient,
+    private val dataStoreManager: DataStoreManager,
 ) : CommonRepository {
     @OptIn(ExperimentalTime::class)
     override fun init(
@@ -290,7 +292,13 @@ internal class CommonRepositoryImpl(
     // Recently data
     override fun getAllRecentData(): Flow<List<RecentlyType>> =
         flow {
-            emit(localDataSource.getAllRecentData())
+            val excludedVideoIds = dataStoreManager.incognitoSongIds.first()
+            emit(
+                localDataSource.getAllRecentData().filterNot { item ->
+                    item is com.maxrave.domain.data.entities.SongEntity &&
+                        item.videoId in excludedVideoIds
+                },
+            )
         }.flowOn(Dispatchers.IO)
 
     // Notifications

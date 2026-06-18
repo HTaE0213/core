@@ -374,7 +374,10 @@ class JvmMediaPlayerHandlerImpl(
             val playbackJob =
                 launch {
                     format.collectLatest { formatTemp ->
-                        if (dataStoreManager.sendBackToGoogle.first() == TRUE) {
+                        if (
+                            dataStoreManager.sendBackToGoogle.first() == TRUE &&
+                            dataStoreManager.incognitoModeEnabled.first() != TRUE
+                        ) {
                             if (formatTemp != null) {
                                 println("format in viewModel: $formatTemp")
                                 Logger.d(TAG, "Collect format ${formatTemp.videoId}")
@@ -467,19 +470,25 @@ class JvmMediaPlayerHandlerImpl(
                                 Logger.w(TAG, "getDataOfNowPlayingState: Updated thumbs $it")
                             }
                         }
-                        songRepository.updateSongInLibrary(now(), songEntity.videoId).singleOrNull().let {
-                            Logger.w(TAG, "getDataOfNowPlayingState: $it")
+                        if (dataStoreManager.incognitoModeEnabled.first() != TRUE) {
+                            dataStoreManager.setIncognitoSongHidden(songEntity.videoId, hidden = false)
+                            songRepository.updateSongInLibrary(now(), songEntity.videoId).singleOrNull().let {
+                                Logger.w(TAG, "getDataOfNowPlayingState: $it")
+                            }
+                            songRepository.updateListenCount(songEntity.videoId)
                         }
-                        songRepository.updateListenCount(songEntity.videoId)
                     } else {
                         _controlState.update { it.copy(isLiked = false) }
+                        val newSongEntity = track?.toSongEntity() ?: mediaItem.toSongEntity()
+                        val isIncognito = dataStoreManager.incognitoModeEnabled.first() == TRUE
                         songRepository
                             .insertSong(
-                                track?.toSongEntity() ?: mediaItem.toSongEntity(),
+                                newSongEntity,
                             ).singleOrNull()
                             ?.let {
                                 Logger.w(TAG, "getDataOfNowPlayingState: $it")
                             }
+                        dataStoreManager.setIncognitoSongHidden(newSongEntity.videoId, hidden = isIncognito)
                     }
                     Logger.w(TAG, "getDataOfNowPlayingState: $songEntity")
                     Logger.w(TAG, "getDataOfNowPlayingState: $track")
@@ -530,7 +539,10 @@ class JvmMediaPlayerHandlerImpl(
                 if (dataStoreManager.sponsorBlockEnabled.first() == TRUE) {
                     getSkipSegments(videoId)
                 }
-                if (dataStoreManager.sendBackToGoogle.first() == TRUE) {
+                if (
+                    dataStoreManager.sendBackToGoogle.first() == TRUE &&
+                    dataStoreManager.incognitoModeEnabled.first() != TRUE
+                ) {
                     getFormat(videoId)
                 }
             }
@@ -579,6 +591,7 @@ class JvmMediaPlayerHandlerImpl(
     ) {
         jobWatchtime?.cancel()
         coroutineScope.launch {
+            if (dataStoreManager.incognitoModeEnabled.first() == TRUE) return@launch
             if (playback != null && atr != null && watchTime != null && cpn != null) {
                 watchTimeList = arrayListOf()
                 streamRepository
@@ -601,6 +614,7 @@ class JvmMediaPlayerHandlerImpl(
             jobWatchtime =
                 launch {
                     simpleMediaState.collect { state ->
+                        if (dataStoreManager.incognitoModeEnabled.first() == TRUE) return@collect
                         if (state is SimpleMediaState.Progress) {
                             val value = state.progress
                             if (value > 0 && watchTimeList.isNotEmpty()) {
@@ -2327,7 +2341,9 @@ class JvmMediaPlayerHandlerImpl(
         currentPositionMillis: Long,
     ) {
         coroutineScope.launch {
-            val trackingEnabled = dataStoreManager.localTrackingEnabled.first() == TRUE
+            val trackingEnabled =
+                dataStoreManager.localTrackingEnabled.first() == TRUE &&
+                    dataStoreManager.incognitoModeEnabled.first() != TRUE
             if (!trackingEnabled) {
                 return@launch
             }

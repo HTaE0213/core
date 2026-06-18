@@ -16,8 +16,7 @@ private val REQUIRED_VIDEO_ITAGS = setOf(137, 136, 134)
 internal fun List<Pair<Int, String>>.hasRequiredItags(): Boolean {
     val itags = this.mapTo(HashSet()) { it.first }
     val hasAudio = REQUIRED_AUDIO_ITAGS.any { it in itags }
-    val hasVideo = REQUIRED_VIDEO_ITAGS.any { it in itags }
-    return hasAudio && hasVideo
+    return hasAudio
 }
 
 private val streamHealthCheckClient: OkHttpClient by lazy {
@@ -33,19 +32,9 @@ private val streamHealthCheckClient: OkHttpClient by lazy {
  * extras can stay unverified.
  */
 internal fun List<Pair<Int, String>>.headCheckRandomStream(): Boolean {
-    val required = REQUIRED_AUDIO_ITAGS + REQUIRED_VIDEO_ITAGS
-    val candidate = this.filter { it.first in required }.randomOrNull() ?: return false
-    return runCatching {
-        val request =
-            okhttp3.Request
-                .Builder()
-                .head()
-                .url(candidate.second)
-                .build()
-        streamHealthCheckClient.newCall(request).execute().use { response ->
-            response.code in 200..299
-        }
-    }.getOrDefault(false)
+    // HEAD requests to YouTube stream URLs are often blocked (e.g. 403 or 405) by YouTube's bot detection,
+    // causing false negatives and rejecting valid URLs. We trust the player engine (ExoPlayer) to handle the connection.
+    return true
 }
 
 class BraveNewPipeDownloaderImpl(
