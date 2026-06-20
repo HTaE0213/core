@@ -60,15 +60,13 @@ internal class CommonRepositoryImpl(
                 launch {
                     combine(dataStoreManager.location, dataStoreManager.language) { location, language ->
                         Pair(location, language)
-                    }.collectLatest { (location, language) ->
+                    }.collectLatest { (location, _) ->
+                        // Keep the app UI localized, but request music metadata in the
+                        // non-localized English catalogue form to avoid translated names.
                         youTube.locale =
                             YouTubeLocale(
                                 location,
-                                try {
-                                    language.substring(0..1)
-                                } catch (e: Exception) {
-                                    "en"
-                                },
+                                "en",
                             )
                     }
                 }

@@ -402,9 +402,12 @@ class YouTube {
                             ?.musicResponsiveHeaderRenderer
                             ?.subtitle
                             ?.runs
-                            ?.lastOrNull()
-                            ?.text
-                            ?.toIntOrNull(),
+                            ?.firstNotNullOfOrNull { run ->
+                                run.text
+                                    .trim()
+                                    .takeIf { it.matches(Regex("\\d{4}")) }
+                                    ?.toIntOrNull()
+                            },
                     thumbnail =
                         response.contents.twoColumnBrowseResultsRenderer.tabs
                             .firstOrNull()

@@ -25,6 +25,7 @@ data class MusicResponsiveListItemRenderer(
     val playlistItemData: PlaylistItemData?,
     val overlay: Overlay?,
     val navigationEndpoint: NavigationEndpoint?,
+    @JsonNames("facepile")
     val contributorsAvatars: ContributorsAvatars? = null,
 ) {
     val isSong: Boolean
