@@ -10,6 +10,7 @@ data class PlaylistState(
     val thumbnail: String? = null,
     val description: String? = null,
     val year: String,
+    val isEditable: Boolean = false,
     val trackCount: Int = 0,
     val radioEndpoint: YouTubeWatchEndpoint? = null,
     val shuffleEndpoint: YouTubeWatchEndpoint? = null,

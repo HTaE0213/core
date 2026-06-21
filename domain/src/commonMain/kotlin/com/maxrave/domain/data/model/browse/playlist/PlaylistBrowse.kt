@@ -16,6 +16,7 @@ data class PlaylistBrowse(
     val trackCount: Int,
     val tracks: List<Track>,
     val year: String,
+    val isEditable: Boolean = false,
     val shuffleEndpoint: YouTubeWatchEndpoint? = null,
     val radioEndpoint: YouTubeWatchEndpoint? = null,
 )

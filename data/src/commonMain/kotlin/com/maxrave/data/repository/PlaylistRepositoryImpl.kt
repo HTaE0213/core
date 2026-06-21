@@ -31,6 +31,7 @@ import com.maxrave.kotlinytmusicscraper.models.SongItem
 import com.maxrave.kotlinytmusicscraper.models.WatchEndpoint
 import com.maxrave.kotlinytmusicscraper.pages.NextPage
 import com.maxrave.kotlinytmusicscraper.models.YouTubeLocale
+import com.maxrave.kotlinytmusicscraper.models.response.BrowseResponse
 import com.maxrave.kotlinytmusicscraper.parser.getPlaylistContinuation
 import com.maxrave.kotlinytmusicscraper.parser.getPlaylistRadioEndpoint
 import com.maxrave.kotlinytmusicscraper.parser.getPlaylistShuffleEndpoint
@@ -282,7 +283,13 @@ internal class PlaylistRepositoryImpl(
 //                            var listTrack = playlistBrowse.tracks.toMutableList()
                         Logger.d("Repository", "playlist final data: ${listContent.size}")
                         if (finalContinueParam != null) {
-                            parsePlaylistData(header, listContent, radioId, viewString)?.let { playlist ->
+                            parsePlaylistData(
+                                header = header,
+                                listContent = listContent,
+                                playlistId = radioId,
+                                viewString = viewString,
+                                isEditable = result.hasEditablePlaylistHeader(),
+                            )?.let { playlist ->
                                 emit(
                                     Resource.Success(
                                         Pair(
@@ -416,7 +423,13 @@ internal class PlaylistRepositoryImpl(
                                 }
                         }
                         Logger.d("getPlaylistData", "playlist final data: ${listContent.size}")
-                        parsePlaylistData(header, data ?: emptyList(), playlistId, viewString)?.let { playlist ->
+                        parsePlaylistData(
+                            header = header,
+                            listContent = data ?: emptyList(),
+                            playlistId = playlistId,
+                            viewString = viewString,
+                            isEditable = result.hasEditablePlaylistHeader(),
+                        )?.let { playlist ->
                             emit(
                                 Resource.Success<PlaylistBrowse>(
                                     playlist.copy(
@@ -521,7 +534,13 @@ internal class PlaylistRepositoryImpl(
                             result.getPlaylistShuffleEndpoint()
                         Logger.d("getPlaylistData", "Endpoint: $radioEndpoint $shuffleEndpoint")
                         try {
-                            parsePlaylistData(header, data ?: emptyList(), playlistId, viewString)?.let { playlist ->
+                            parsePlaylistData(
+                                header = header,
+                                listContent = data ?: emptyList(),
+                                playlistId = playlistId,
+                                viewString = viewString,
+                                isEditable = result.hasEditablePlaylistHeader(),
+                            )?.let { playlist ->
                                 emit(
                                     Resource.Success<Pair<PlaylistBrowse, String?>>(
                                         Pair(
@@ -845,3 +864,15 @@ internal class PlaylistRepositoryImpl(
                 }
         }.flowOn(Dispatchers.IO)
 }
+
+private fun BrowseResponse.hasEditablePlaylistHeader(): Boolean =
+    header?.musicEditablePlaylistDetailHeaderRenderer != null ||
+        contents
+            ?.twoColumnBrowseResultsRenderer
+            ?.tabs
+            ?.firstOrNull()
+            ?.tabRenderer
+            ?.content
+            ?.sectionListRenderer
+            ?.contents
+            ?.any { it.musicEditablePlaylistDetailHeaderRenderer != null } == true

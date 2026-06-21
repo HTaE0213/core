@@ -1,6 +1,7 @@
 package com.maxrave.data.parser
 
 import com.maxrave.domain.data.entities.SetVideoIdEntity
+import com.maxrave.domain.data.model.browse.album.PlaylistContributor
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.browse.playlist.Author
 import com.maxrave.domain.data.model.browse.playlist.PlaylistBrowse
@@ -23,6 +24,7 @@ internal fun parsePlaylistData(
     listContent: List<MusicShelfRenderer.Content>,
     playlistId: String,
     viewString: String,
+    isEditable: Boolean = false,
 ): PlaylistBrowse? {
     if (header != null) {
         var title = ""
@@ -256,6 +258,11 @@ internal fun parsePlaylistData(
         Logger.d("PlaylistParser", "description: $description")
         val listTrack: MutableList<Track> = arrayListOf()
         for (content in listContent) {
+            val contributorStack =
+                content.musicResponsiveListItemRenderer
+                    ?.contributorsAvatars
+                    ?.avatarStackViewModel
+            val contributorAvatar = contributorStack?.avatars?.firstOrNull()?.avatarViewModel
             val track =
                 Track(
                     album =
@@ -351,6 +358,20 @@ internal fun parsePlaylistData(
                     feedbackTokens = null,
                     resultType = null,
                     year = null,
+                    addedBy =
+                        contributorAvatar?.let { avatar ->
+                            PlaylistContributor(
+                                name = avatar.accessibilityText,
+                                channelId =
+                                    contributorStack.rendererContext
+                                        ?.commandContext
+                                        ?.onTap
+                                        ?.innertubeCommand
+                                        ?.browseEndpoint
+                                        ?.browseId,
+                                avatarUrl = avatar.image?.sources?.lastOrNull()?.url,
+                            )
+                        },
                 )
             if (track.videoId != "") {
                 listTrack.add(track)
@@ -371,6 +392,7 @@ internal fun parsePlaylistData(
             trackCount = if (trackCount == 0) listContent.size else trackCount,
             tracks = listTrack,
             year = year,
+            isEditable = isEditable,
         )
     } else {
         return null
